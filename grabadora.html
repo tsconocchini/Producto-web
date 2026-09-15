@@ -1,0 +1,757 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dictáfono</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;1,6..72,300&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --papel:#E6E7E1;
+    --papel-hueco:#DCDED6;
+    --tinta:#1C1F1A;
+    --tenue:#6E7268;
+    --linea:#C9CBC2;
+    --senal:#A93226;
+    --radio:2px;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--papel);
+    color:var(--tinta);
+    font-family:'Archivo',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  :focus-visible{outline:2px solid var(--tinta);outline-offset:3px}
+
+  /* ---------- estructura ---------- */
+  .pantalla{
+    height:100dvh;
+    display:grid;
+    grid-template-rows:auto minmax(0,1fr);
+  }
+
+  .barra{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:14px 18px;
+  }
+  .menu{
+    width:40px;height:40px;
+    display:grid;align-content:center;gap:5px;
+    padding:0 8px;
+  }
+  .menu span{display:block;height:1.5px;background:var(--tinta)}
+  .menu span:nth-child(2){width:70%}
+
+  .estado{
+    font-size:12px;
+    letter-spacing:.04em;
+    color:var(--tenue);
+    display:flex;align-items:center;gap:7px;
+  }
+  .punto{width:7px;height:7px;border-radius:50%;background:var(--linea)}
+  body[data-estado="grabando"] .punto{background:var(--senal);animation:latir 1.4s ease-in-out infinite}
+  body[data-estado="grabando"] .estado{color:var(--senal)}
+  @keyframes latir{50%{opacity:.25}}
+  @media (prefers-reduced-motion:reduce){.punto{animation:none!important}}
+
+  /* ---------- zona principal ---------- */
+  .lienzo{
+    display:grid;
+    grid-template-rows:auto minmax(0,1fr);
+    min-height:0;
+  }
+
+  .control{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+    padding:8px 20px 22px;
+  }
+
+  .boton-grabar{
+    position:relative;
+    width:132px;height:132px;
+    display:grid;place-items:center;
+  }
+  .boton-grabar canvas{
+    position:absolute;inset:0;width:100%;height:100%;
+  }
+  .disco{
+    position:relative;
+    width:86px;height:86px;border-radius:50%;
+    background:var(--senal);
+    box-shadow:0 0 0 1px rgba(120,32,26,.25);
+    display:grid;place-items:center;
+    transition:width .22s ease,height .22s ease,border-radius .22s ease,background .22s ease;
+  }
+  .disco::after{
+    content:"";
+    width:26px;height:26px;border-radius:50%;
+    background:var(--papel);
+    transition:all .22s ease;
+  }
+  body[data-estado="grabando"] .disco{background:#78201A}
+  body[data-estado="guardando"] .disco{background:#8E5C55}
+  body[data-estado="grabando"] .disco::after{width:24px;height:24px;border-radius:3px}
+  .boton-grabar:hover .disco{transform:none}
+
+  .reloj{
+    font-family:'Newsreader',serif;
+    font-size:30px;
+    font-variant-numeric:tabular-nums;
+    line-height:1;
+    color:var(--tenue);
+  }
+  body[data-estado="grabando"] .reloj{color:var(--tinta)}
+  .pie{font-size:13px;color:var(--tenue)}
+
+  /* ---------- transcripción ---------- */
+  .hoja{
+    min-height:0;
+    overflow-y:auto;
+    padding:0 22px 40px;
+    border-top:1px solid var(--linea);
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0 39px,
+        var(--linea) 39px 40px
+      );
+    background-position:0 4px;
+  }
+  .hoja-interior{
+    max-width:62ch;
+    margin:0 auto;
+    padding-top:24px;
+  }
+  .texto{
+    font-family:'Newsreader',serif;
+    font-size:20px;
+    line-height:40px;
+    font-weight:300;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .parcial{color:var(--tenue);font-style:italic}
+  .vacio{
+    font-family:'Newsreader',serif;
+    font-style:italic;
+    font-size:19px;
+    line-height:40px;
+    color:var(--tenue);
+    max-width:34ch;
+  }
+
+  /* ---------- cajón ---------- */
+  .velo{
+    position:fixed;inset:0;
+    background:rgba(28,31,26,.35);
+    opacity:0;pointer-events:none;
+    transition:opacity .2s ease;
+  }
+  .cajon{
+    position:fixed;top:0;left:0;bottom:0;
+    width:min(370px,86vw);
+    background:var(--papel-hueco);
+    border-right:1px solid var(--linea);
+    transform:translateX(-101%);
+    transition:transform .24s cubic-bezier(.4,0,.2,1);
+    display:flex;flex-direction:column;
+    z-index:5;
+  }
+  body.abierto .cajon{transform:translateX(0)}
+  body.abierto .velo{opacity:1;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.cajon{transition:none}}
+
+  .cajon-cabeza{
+    display:flex;align-items:baseline;justify-content:space-between;
+    padding:20px 20px 14px;
+    border-bottom:1px solid var(--linea);
+  }
+  .cajon-cabeza h2{
+    margin:0;
+    font-family:'Newsreader',serif;
+    font-weight:400;font-size:24px;
+  }
+  .cerrar{font-size:22px;line-height:1;color:var(--tenue);padding:4px 6px}
+
+  .lista{list-style:none;margin:0;padding:0;overflow-y:auto;flex:1}
+  .lista li{border-bottom:1px solid var(--linea)}
+  .ficha{
+    width:100%;text-align:left;
+    padding:15px 20px;
+    display:grid;gap:5px;
+  }
+  .ficha:hover,.ficha:focus-visible{background:rgba(28,31,26,.05)}
+  .ficha .meta{
+    font-size:12px;color:var(--tenue);
+    display:flex;gap:10px;
+  }
+  .ficha .adelanto{
+    font-family:'Newsreader',serif;
+    font-size:16px;line-height:1.45;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+  .sin-nada{padding:26px 20px;color:var(--tenue);font-size:14px;line-height:1.6}
+
+  /* ---------- detalle ---------- */
+  .detalle{
+    position:fixed;inset:0;
+    background:var(--papel);
+    z-index:8;
+    display:none;
+    grid-template-rows:auto minmax(0,1fr) auto;
+  }
+  body.viendo .detalle{display:grid}
+  .detalle-cabeza{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:12px;padding:16px 20px;border-bottom:1px solid var(--linea);
+  }
+  .detalle-cabeza .titulo{font-size:14px}
+  .detalle-cabeza .fecha{font-size:12px;color:var(--tenue);margin-top:3px}
+  .acciones{display:flex;gap:6px}
+  .acciones button{
+    font-size:13px;padding:7px 12px;
+    border:1px solid var(--linea);border-radius:var(--radio);
+  }
+  .acciones button:hover{border-color:var(--tinta)}
+  .borrar{color:var(--senal)}
+  .detalle-cuerpo{overflow-y:auto;padding:24px 22px 40px}
+  .detalle-cuerpo .texto{max-width:62ch;margin:0 auto}
+  .detalle-pie{padding:12px 20px 18px;border-top:1px solid var(--linea)}
+  .detalle-pie audio{width:100%;height:38px}
+  .nota{font-size:12px;color:var(--tenue);padding:6px 2px 0}
+
+  /* ---------- permiso ---------- */
+  .permiso{
+    position:fixed;inset:0;z-index:12;
+    background:var(--papel);
+    display:none;
+    place-items:center;
+    padding:26px;
+  }
+  body.pidiendo .permiso{display:grid}
+  .permiso-caja{max-width:44ch}
+  .permiso h1{
+    font-family:'Newsreader',serif;
+    font-weight:400;font-size:30px;line-height:1.2;
+    margin:0 0 14px;
+  }
+  .permiso p{font-size:15px;line-height:1.65;color:var(--tenue);margin:0 0 14px}
+  .permiso .lista-usos{
+    margin:0 0 22px;padding:0;list-style:none;
+    font-size:15px;line-height:1.65;
+  }
+  .permiso .lista-usos li{
+    padding-left:18px;position:relative;
+  }
+  .permiso .lista-usos li::before{
+    content:"";position:absolute;left:0;top:11px;
+    width:7px;height:1.5px;background:var(--senal);
+  }
+  .permiso .botones{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .primario{
+    background:var(--senal);color:#F6F4EF;
+    padding:12px 20px;border-radius:var(--radio);
+    font-size:15px;
+  }
+  .primario:hover{background:#78201A}
+  .secundario{font-size:14px;color:var(--tenue);text-decoration:underline;padding:12px 4px}
+  .diagnostico{
+    margin-top:20px;font-size:13px;line-height:1.6;
+    border-left:2px solid var(--senal);padding:4px 0 4px 12px;
+    display:none;
+  }
+  .diagnostico.visible{display:block}
+  .diagnostico code{
+    font-family:ui-monospace,monospace;font-size:12px;
+    background:var(--papel-hueco);padding:1px 5px;
+  }
+
+  .aviso{
+    margin:0 auto;max-width:62ch;
+    font-size:13px;line-height:1.6;color:var(--tenue);
+    border-left:2px solid var(--senal);
+    padding:2px 0 2px 12px;
+  }
+</style>
+
+<body data-estado="listo">
+
+<div class="pantalla">
+  <header class="barra">
+    <button class="menu" id="btnMenu" aria-label="Ver grabaciones anteriores">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="estado"><i class="punto"></i><span id="txtEstado">Listo para grabar</span></div>
+  </header>
+
+  <main class="lienzo">
+    <div class="control">
+      <button class="boton-grabar" id="btnGrabar" aria-label="Comenzar a grabar">
+        <canvas id="onda" width="264" height="264" aria-hidden="true"></canvas>
+        <span class="disco"></span>
+      </button>
+      <div class="reloj" id="reloj">00:00</div>
+      <div class="pie" id="pie">Tocá para empezar</div>
+    </div>
+
+    <section class="hoja" id="hoja">
+      <div class="hoja-interior">
+        <p class="vacio" id="vacio">Lo que digas aparece acá mientras hablás.</p>
+        <p class="texto" id="texto"></p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="velo" id="velo"></div>
+
+<aside class="cajon" id="cajon" aria-label="Grabaciones anteriores">
+  <div class="cajon-cabeza">
+    <h2>Grabaciones</h2>
+    <button class="cerrar" id="btnCerrar" aria-label="Cerrar">&times;</button>
+  </div>
+  <ul class="lista" id="lista"></ul>
+  <p class="sin-nada" id="sinNada">Todavía no guardaste ninguna. La primera aparece acá apenas frenes la grabación.</p>
+</aside>
+
+<div class="permiso" id="permiso">
+  <div class="permiso-caja">
+    <h1>Dictáfono necesita tu micrófono</h1>
+    <p>Antes de grabar, tu navegador te va a pedir autorización. Sin ese permiso no hay audio ni transcripción.</p>
+    <ul class="lista-usos">
+      <li>Graba el audio del ambiente y lo guarda en este dispositivo.</li>
+      <li>Convierte lo que decís en texto mientras hablás.</li>
+      <li>Nada sale de tu equipo salvo lo que el navegador manda al servicio de dictado.</li>
+    </ul>
+    <div class="botones">
+      <button class="primario" id="btnPermitir">Permitir micrófono</button>
+      <button class="secundario" id="btnSaltar">Ahora no</button>
+    </div>
+    <div class="diagnostico" id="diagnostico"></div>
+  </div>
+</div>
+
+<div class="detalle" id="detalle">
+  <div class="detalle-cabeza">
+    <div>
+      <div class="titulo" id="detTitulo"></div>
+      <div class="fecha" id="detFecha"></div>
+    </div>
+    <div class="acciones">
+      <button id="btnVolver">Volver</button>
+      <button id="btnDescargar">Descargar</button>
+      <button class="borrar" id="btnBorrar">Borrar</button>
+    </div>
+  </div>
+  <div class="detalle-cuerpo"><p class="texto" id="detTexto"></p></div>
+  <div class="detalle-pie">
+    <audio id="detAudio" controls></audio>
+    <div class="nota" id="detNota"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const CLAVE_INDICE = "grabaciones:indice";
+  const LIMITE_AUDIO = 3.4 * 1024 * 1024; // margen bajo el tope de 5 MB por clave
+
+  const $ = id => document.getElementById(id);
+  const cuerpo = document.body;
+
+  let estado = "listo";           // listo | grabando | guardando
+  let stream, grabador, trozos = [];
+  let recon = null, reconActivo = false;
+  let textoFinal = "", textoParcial = "";
+  let t0 = 0, cronometro = null;
+  let ctxAudio, analizador, datos, animacion;
+  let indice = [];
+  let abierta = null;             // grabación abierta en el detalle
+
+  /* ---------- utilidades ---------- */
+  const dosDig = n => String(n).padStart(2,"0");
+  function formatoTiempo(ms){
+    const s = Math.floor(ms/1000);
+    return dosDig(Math.floor(s/60)) + ":" + dosDig(s%60);
+  }
+  function fechaLarga(iso){
+    const d = new Date(iso);
+    return d.toLocaleDateString("es-AR",{day:"numeric",month:"long",year:"numeric"}) +
+           ", " + d.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
+  }
+  function fechaCorta(iso){
+    const d = new Date(iso);
+    return d.toLocaleDateString("es-AR",{day:"2-digit",month:"short"}) +
+           " · " + d.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
+  }
+  function ponerEstado(nuevo, leyenda, pie){
+    estado = nuevo;
+    cuerpo.dataset.estado = nuevo;
+    $("txtEstado").textContent = leyenda;
+    $("pie").textContent = pie;
+    $("btnGrabar").setAttribute("aria-label",
+      nuevo === "grabando" ? "Frenar y guardar la grabación" : "Comenzar a grabar");
+  }
+
+  /* ---------- transcripción ---------- */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  function armarRecon(){
+    if(!SR) return null;
+    const r = new SR();
+    r.lang = "es-AR";
+    r.continuous = true;
+    r.interimResults = true;
+    r.onresult = e => {
+      let parcial = "";
+      for(let i = e.resultIndex; i < e.results.length; i++){
+        const frase = e.results[i][0].transcript;
+        if(e.results[i].isFinal){
+          textoFinal += (textoFinal ? " " : "") + frase.trim();
+        } else {
+          parcial += frase;
+        }
+      }
+      textoParcial = parcial;
+      pintarTexto();
+    };
+    r.onerror = e => {
+      if(e.error === "not-allowed" || e.error === "service-not-allowed"){
+        $("txtEstado").textContent = "Sin permiso para el micrófono";
+      }
+    };
+    r.onend = () => {
+      // el motor corta solo cada tanto: lo reanudamos mientras siga grabando
+      if(reconActivo){ try{ r.start(); }catch(_){} }
+    };
+    return r;
+  }
+
+  function pintarTexto(){
+    const nodo = $("texto");
+    nodo.innerHTML = "";
+    if(textoFinal) nodo.append(document.createTextNode(textoFinal + (textoParcial ? " " : "")));
+    if(textoParcial){
+      const s = document.createElement("span");
+      s.className = "parcial";
+      s.textContent = textoParcial;
+      nodo.append(s);
+    }
+    $("vacio").style.display = (textoFinal || textoParcial) ? "none" : "block";
+    const hoja = $("hoja");
+    hoja.scrollTop = hoja.scrollHeight;
+  }
+
+  /* ---------- onda ---------- */
+  function dibujarOnda(){
+    const c = $("onda"), g = c.getContext("2d");
+    const lado = c.width, centro = lado/2;
+    g.clearRect(0,0,lado,lado);
+    if(estado === "grabando" && analizador){
+      analizador.getByteTimeDomainData(datos);
+      let suma = 0;
+      for(let i=0;i<datos.length;i++){ const v=(datos[i]-128)/128; suma += v*v; }
+      const nivel = Math.min(1, Math.sqrt(suma/datos.length) * 3.2);
+      const base = 92, extra = 34 * nivel;
+      g.beginPath();
+      g.arc(centro, centro, base + extra, 0, Math.PI*2);
+      g.strokeStyle = "rgba(169,50,38,.30)";
+      g.lineWidth = 2;
+      g.stroke();
+      g.beginPath();
+      g.arc(centro, centro, base + extra*0.45, 0, Math.PI*2);
+      g.strokeStyle = "rgba(169,50,38,.55)";
+      g.lineWidth = 1.5;
+      g.stroke();
+    }
+    animacion = requestAnimationFrame(dibujarOnda);
+  }
+
+  /* ---------- permiso de micrófono ---------- */
+  const PEDIDO = {audio:{echoCancellation:true, noiseSuppression:true}};
+  let permisoOk = false;
+
+  function hayApi(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
+
+  function explicar(err){
+    const enIframe = window.self !== window.top;
+    if(!window.isSecureContext){
+      return "El navegador solo entrega el micrófono en páginas seguras. Abrí el archivo desde <code>https://</code> o desde <code>http://localhost</code>, no con doble clic sobre el archivo.";
+    }
+    if(!hayApi()){
+      return "Este navegador no expone <code>getUserMedia</code>. Probá con Chrome o Edge actualizados.";
+    }
+    const nombre = err && err.name || "";
+    if(nombre === "NotAllowedError" || nombre === "SecurityError"){
+      return enIframe
+        ? "La página está dentro de un marco que tiene el micrófono bloqueado por política del sitio. No se arregla desde el código de la app: hay que abrir el archivo directo en el navegador."
+        : "Rechazaste el permiso o el navegador lo tiene bloqueado para este sitio. Tocá el candado en la barra de direcciones, habilitá el micrófono y recargá.";
+    }
+    if(nombre === "NotFoundError" || nombre === "OverconstrainedError"){
+      return "El sistema no encuentra ningún micrófono conectado.";
+    }
+    if(nombre === "NotReadableError"){
+      return "Otro programa está usando el micrófono. Cerralo y volvé a intentar.";
+    }
+    return "No se pudo abrir el micrófono" + (nombre ? " (<code>" + nombre + "</code>)" : "") + ".";
+  }
+
+  function mostrarDiagnostico(texto){
+    const d = $("diagnostico");
+    d.innerHTML = texto;
+    d.classList.add("visible");
+  }
+
+  async function pedirPermiso(){
+    if(!hayApi() || !window.isSecureContext){
+      mostrarDiagnostico(explicar(null));
+      return false;
+    }
+    try{
+      const s = await navigator.mediaDevices.getUserMedia(PEDIDO);
+      s.getTracks().forEach(t => t.stop());   // se libera hasta que grabes
+      permisoOk = true;
+      cuerpo.classList.remove("pidiendo");
+      ponerEstado("listo","Listo para grabar","Tocá para empezar");
+      return true;
+    }catch(err){
+      mostrarDiagnostico(explicar(err));
+      return false;
+    }
+  }
+
+  async function revisarPermiso(){
+    let estadoPermiso = null;
+    try{
+      if(navigator.permissions && navigator.permissions.query){
+        const p = await navigator.permissions.query({name:"microphone"});
+        estadoPermiso = p.state;
+        p.onchange = () => { if(p.state === "granted") permisoOk = true; };
+      }
+    }catch(_){}
+    if(estadoPermiso === "granted"){ permisoOk = true; return; }
+    cuerpo.classList.add("pidiendo");
+    if(!window.isSecureContext || !hayApi()) mostrarDiagnostico(explicar(null));
+  }
+
+  /* ---------- grabar ---------- */
+  async function empezar(){
+    try{
+      stream = await navigator.mediaDevices.getUserMedia(PEDIDO);
+      permisoOk = true;
+    }catch(err){
+      cuerpo.classList.add("pidiendo");
+      mostrarDiagnostico(explicar(err));
+      ponerEstado("listo","Sin acceso al micrófono","Tocá para empezar");
+      return;
+    }
+
+    textoFinal = ""; textoParcial = "";
+    pintarTexto();
+    if(!SR){
+      $("vacio").innerHTML = '<span class="aviso">Este navegador no transcribe en vivo. El audio igual se graba y se guarda. Para ver el texto mientras hablás, abrilo en Chrome o Edge.</span>';
+      $("vacio").style.display = "block";
+    }
+
+    trozos = [];
+    const tipos = ["audio/webm;codecs=opus","audio/webm","audio/mp4",""];
+    const tipo = tipos.find(t => t === "" || (window.MediaRecorder && MediaRecorder.isTypeSupported(t)));
+    grabador = new MediaRecorder(stream, tipo ? {mimeType:tipo} : undefined);
+    grabador.ondataavailable = e => { if(e.data && e.data.size) trozos.push(e.data); };
+    grabador.onstop = guardar;
+    grabador.start();
+
+    ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+    analizador = ctxAudio.createAnalyser();
+    analizador.fftSize = 1024;
+    datos = new Uint8Array(analizador.fftSize);
+    ctxAudio.createMediaStreamSource(stream).connect(analizador);
+
+    recon = armarRecon();
+    if(recon){ reconActivo = true; try{ recon.start(); }catch(_){} }
+
+    t0 = Date.now();
+    $("reloj").textContent = "00:00";
+    cronometro = setInterval(() => { $("reloj").textContent = formatoTiempo(Date.now()-t0); }, 200);
+
+    ponerEstado("grabando","Grabando","Tocá de nuevo para frenar y guardar");
+  }
+
+  function frenar(){
+    ponerEstado("guardando","Guardando…","Un segundo");
+    reconActivo = false;
+    if(recon){ try{ recon.stop(); }catch(_){} }
+    clearInterval(cronometro);
+    if(grabador && grabador.state !== "inactive") grabador.stop();
+  }
+
+  function aBase64(blob){
+    return new Promise((res,rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result);
+      fr.onerror = () => rej(new Error("no se pudo leer el audio"));
+      fr.readAsDataURL(blob);
+    });
+  }
+
+  async function guardar(){
+    const duracion = Date.now() - t0;
+    const blob = new Blob(trozos, {type: grabador.mimeType || "audio/webm"});
+    if(stream) stream.getTracks().forEach(t => t.stop());
+    if(ctxAudio) { try{ ctxAudio.close(); }catch(_){} }
+    analizador = null;
+
+    const texto = (textoFinal + (textoParcial ? " " + textoParcial : "")).trim();
+    const id = "g" + Date.now();
+    const iso = new Date().toISOString();
+
+    let audio = null, motivoSinAudio = "";
+    if(!blob.size){
+      motivoSinAudio = "El micrófono no entregó audio: quedó guardado solo el texto.";
+    }
+    try{
+      if(!blob.size) throw new Error("vacío");
+      const d = await aBase64(blob);
+      if(d.length <= LIMITE_AUDIO) audio = d;
+      else motivoSinAudio = "El audio superaba el espacio por grabación, así que se guardó solo el texto.";
+    }catch(_){
+      if(!motivoSinAudio) motivoSinAudio = "No se pudo guardar el audio; el texto sí quedó.";
+    }
+
+    const ficha = {
+      id, fecha: iso, duracion,
+      titulo: texto ? texto.split(/\s+/).slice(0,6).join(" ") : "Grabación sin texto",
+      adelanto: texto ? texto.slice(0,180) : "Sin transcripción",
+      conAudio: !!audio
+    };
+
+    let ok = true;
+    try{
+      await window.storage.set("grabacion:" + id, JSON.stringify({texto, audio, nota: motivoSinAudio}));
+      indice.unshift(ficha);
+      await window.storage.set(CLAVE_INDICE, JSON.stringify(indice));
+    }catch(err){
+      ok = false;
+      indice = indice.filter(f => f.id !== id);
+    }
+
+    pintarLista();
+    ponerEstado("listo",
+      ok ? "Guardada" : "No se pudo guardar",
+      ok ? "Está en el menú de la izquierda · Tocá para grabar otra"
+         : "El texto sigue en pantalla · Copialo antes de grabar otra vez");
+    if(ok) $("reloj").textContent = formatoTiempo(duracion);
+  }
+
+  /* ---------- listado ---------- */
+  async function cargarIndice(){
+    try{
+      const r = await window.storage.get(CLAVE_INDICE);
+      indice = r ? JSON.parse(r.value) : [];
+    }catch(_){ indice = []; }
+    pintarLista();
+  }
+
+  function pintarLista(){
+    const ul = $("lista");
+    ul.innerHTML = "";
+    $("sinNada").style.display = indice.length ? "none" : "block";
+    indice.forEach(f => {
+      const li = document.createElement("li");
+      const b = document.createElement("button");
+      b.className = "ficha";
+      b.innerHTML =
+        '<span class="meta"><span>' + fechaCorta(f.fecha) + '</span><span>' +
+        formatoTiempo(f.duracion) + '</span>' + (f.conAudio ? "" : "<span>solo texto</span>") + '</span>' +
+        '<span class="adelanto"></span>';
+      b.querySelector(".adelanto").textContent = f.adelanto;
+      b.addEventListener("click", () => abrir(f));
+      li.append(b);
+      ul.append(li);
+    });
+  }
+
+  async function abrir(ficha){
+    abierta = ficha;
+    $("detTitulo").textContent = ficha.titulo;
+    $("detFecha").textContent = fechaLarga(ficha.fecha) + " · " + formatoTiempo(ficha.duracion);
+    $("detTexto").textContent = "Abriendo…";
+    $("detNota").textContent = "";
+    $("detAudio").removeAttribute("src");
+    cuerpo.classList.add("viendo");
+    try{
+      const r = await window.storage.get("grabacion:" + ficha.id);
+      const d = JSON.parse(r.value);
+      $("detTexto").textContent = d.texto || "Esta grabación no tiene transcripción.";
+      if(d.audio){ $("detAudio").src = d.audio; $("detAudio").style.display = "block"; }
+      else { $("detAudio").style.display = "none"; }
+      $("detNota").textContent = d.nota || "";
+      abierta.audio = d.audio || null;
+      abierta.texto = d.texto || "";
+    }catch(_){
+      $("detTexto").textContent = "No se pudo leer esta grabación.";
+    }
+  }
+
+  async function borrar(){
+    if(!abierta) return;
+    try{ await window.storage.delete("grabacion:" + abierta.id); }catch(_){}
+    indice = indice.filter(f => f.id !== abierta.id);
+    try{ await window.storage.set(CLAVE_INDICE, JSON.stringify(indice)); }catch(_){}
+    abierta = null;
+    cuerpo.classList.remove("viendo");
+    pintarLista();
+  }
+
+  function descargar(){
+    if(!abierta) return;
+    const a = document.createElement("a");
+    const base = "grabacion-" + abierta.id;
+    if(abierta.audio){ a.href = abierta.audio; a.download = base + ".webm"; a.click(); }
+    const b = document.createElement("a");
+    b.href = URL.createObjectURL(new Blob([abierta.texto || ""], {type:"text/plain"}));
+    b.download = base + ".txt";
+    b.click();
+    URL.revokeObjectURL(b.href);
+  }
+
+  /* ---------- eventos ---------- */
+  $("btnGrabar").addEventListener("click", () => {
+    if(estado === "listo") empezar();
+    else if(estado === "grabando") frenar();
+  });
+  $("btnMenu").addEventListener("click", () => cuerpo.classList.add("abierto"));
+  $("btnCerrar").addEventListener("click", () => cuerpo.classList.remove("abierto"));
+  $("velo").addEventListener("click", () => cuerpo.classList.remove("abierto"));
+  $("btnVolver").addEventListener("click", () => { $("detAudio").pause(); cuerpo.classList.remove("viendo"); });
+  $("btnBorrar").addEventListener("click", borrar);
+  $("btnDescargar").addEventListener("click", descargar);
+  document.addEventListener("keydown", e => {
+    if(e.key === "Escape"){ cuerpo.classList.remove("abierto"); cuerpo.classList.remove("viendo"); }
+  });
+
+  $("btnPermitir").addEventListener("click", pedirPermiso);
+  $("btnSaltar").addEventListener("click", () => {
+    cuerpo.classList.remove("pidiendo");
+    ponerEstado("listo","Falta el permiso del micrófono","Tocá para pedirlo de nuevo");
+  });
+
+  dibujarOnda();
+  cargarIndice();
+  revisarPermiso();
+})();
+</script>
+</body>
